@@ -132,7 +132,9 @@ create_main_py() {
     # ~/main.py
     touch $main
     printf \
-"from backend.entry import app
+"from backend.entry import create_app
+
+app = create_app()
 
 if __name__ == '__main__':
     app
