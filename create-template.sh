@@ -47,11 +47,10 @@ step_1_create_dirs() {
             $routers \
             $db
 }
-
 # ~/BACKEND FILES
 step_2_create_dir_files_v1() {
     # ~/backend/entry.py
-    touch $base_dir/$entry
+    # touch $base_dir/$entry
     #~/backend/settings.py
     touch $base_dir/$settings
     # ~/backend/...
@@ -86,20 +85,23 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 ADD backend backend
 ADD main.py .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+ENV PORT=5000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
 " > $dockerfile
 }
 
 
 
-create_test_config() {
-    # ~/tests
+create_test_config() {    # ~/tests
     mkdir $base_dir_tests
+
     touch $base_dir_tests/$init
     # ~/tests/conftest.py
     touch $base_dir_tests/$conftest
 
-    touch $base_dir_tests/test_one.py $base_dir_tests/test_two.py
+    touch $base_dir_tests/test_one.py \
+            $base_dir_tests/test_two.py
     # ~/setup.cfg
     touch $setup_cfg
     printf \
@@ -125,6 +127,22 @@ filterwarnings = ignore::DeprecationWarning
 }
 
 
+create_entry_py() {
+    touch $base_dir/$entry
+
+    printf \
+"from fastapi import FastAPI
+
+def create_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.get('/')
+    async def test_route():
+        return {'message': 'Hello World'}
+
+    return app
+" > $base_dir/$entry
+}
 
 
 
@@ -140,7 +158,6 @@ if __name__ == '__main__':
     app
     " > $main
 }
-
 
 
 
@@ -182,6 +199,7 @@ main_init() {
 step_1_create_dirs
 step_2_create_dir_files_v1
 create_main_py
+create_entry_py
 create_test_config
 create_startup_and_test_script
 create_dockerfile_dgo
@@ -189,5 +207,5 @@ create_other_root_files
 }
 
 
-main_init
-# rm -rf $base_dir $base_dir_tests && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+# main_init
+rm -rf $base_dir $base_dir_tests && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
