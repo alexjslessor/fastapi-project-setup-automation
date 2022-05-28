@@ -232,8 +232,8 @@ create_startup_and_test_script() {
 "#!/bin/bash
 
 init_env() {
-    # grep -v '^#' .env/.dev.local
-    export $ (grep -v '^#' .env/.dev.local | xargs)
+    # grep -v '^#' .env/.env.local
+    export $ (grep -v '^#' .env/.env.local | xargs)
     env | grep MONGO_URI_DEV
 }
 
@@ -261,8 +261,8 @@ create_other_root_files() {
 }
 
 create_gitignore() {
-    # touch $gitignore
-    printf "__pycache__
+    printf \
+"__pycache__
 .env
 " > $gitignore
 }
@@ -274,8 +274,8 @@ create_env_files() {
     touch $env_folder/.env.example
 
 printf \
-"SECRET=<hex hash>
-MONGO_URI_DEV=<mongo uri>
+"SECRET=hex_hash
+MONGO_URI_DEV=mongo_uri
 WHICH_LOGGER=uvicorn
 ENV_NAME=development
 PORT=5000
@@ -297,8 +297,8 @@ create_other_root_files
 create_env_files
 }
 
-main_init
-# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+# main_init
+rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
 # print_eof() {
