@@ -4,6 +4,8 @@
 # test folder in base dir outside of module.
 base_dir_tests=tests
 base_dir=backend
+env_folder=.env
+
 deps=$base_dir/deps
 config=$base_dir/config
 utils=$base_dir/utils
@@ -35,6 +37,8 @@ startup=startup.sh
 gitignore=.gitignore 
 dockerignore=.dockerignore
 reqs=requirements.txt
+# .env file local
+env_file=.env.local
 
 
 
@@ -87,7 +91,8 @@ ADD main.py .
 
 ENV PORT=5000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+#CMD ['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '5000']
+CMD uvicorn main:app --host 0.0.0.0 --port 5000
 " > $dockerfile
 }
 
@@ -105,10 +110,10 @@ create_test_config() {    # ~/tests
     # ~/setup.cfg
     touch $setup_cfg
     printf \
-    "[coverage:run]
+"[coverage:run]
 branch = True
 # define paths to omit, comma separated
-omit = */.virtualenvs/*,~/.virtualenvs,./backend/utils/*,./backend/config/*
+omit = */.virtualenvs/*,~/.virtualenvs,./backend/utils/*
 [coverage:report]
 show_missing = True
 skip_covered = True
@@ -171,7 +176,7 @@ from typing import List, Callable
 import os.path
 
 class _BaseSettings(BaseSettings):
-    TITLE: str = 'Example'
+    TITLE: str = 'Example App'
     DOCS_URL: str = '/docs'
     OPENAPI_URL: str = '/openapi'
     REDOC_URL: str = '/redoc'
@@ -189,7 +194,7 @@ class _BaseSettings(BaseSettings):
     FILE_TYPE_ERROR = 'Upload File Error: Incorrect File Type.'
 
     PORT: int = environ.get('PORT')
-    MONGO_URI: AnyUrl = environ.get('MONGO_URI')
+    MONGO_URI_DEV: str = environ.get('MONGO_URI_DEV')
     MONGO_DB_NAME: str = 'database'
 
 class DevSettings(_BaseSettings):
@@ -223,14 +228,18 @@ def get_settings() -> BaseSettings:
 create_startup_and_test_script() {
     # ~/startup.sh
     touch $startup
-    printf \
-"export SECRET='<hex hash>'
-export MONGO_URI='<mongo uri>'
-export WHICH_LOGGER=uvicorn
-export ENV_NAME=development
-export PORT=5000
+    printf  \
+"#!/bin/bash
 
-uvicorn main:app --port $PORT --reload
+init_env() {
+    # grep -v '^#' .env/.dev.local
+    export $ (grep -v '^#' .env/.dev.local | xargs)
+    env | grep MONGO_URI_DEV
+}
+
+# Start app with env vars
+init_env
+uvicorn main:app --reload --port 5000
 
 run_tests() {
     py.test -s tests/test_one.py
@@ -241,16 +250,37 @@ run_docker_local_test() {
     docker run --name test-container -p 5000:5000 fastapi_app:latest
 }
 " > $startup
-}
 
+sudo chmod 755 $startup
+}
 
 
 create_other_root_files() {
     # create root files
-    touch $reqs $gitignore $dockerignore
+    touch $reqs $dockerignore
 }
 
+create_gitignore() {
+    # touch $gitignore
+    printf "__pycache__
+.env
+" > $gitignore
+}
 
+create_env_files() {
+    # create .env folder and files
+    mkdir $env_folder
+    touch $env_folder/$env_file
+    touch $env_folder/.env.example
+
+printf \
+"SECRET=<hex hash>
+MONGO_URI_DEV=<mongo uri>
+WHICH_LOGGER=uvicorn
+ENV_NAME=development
+PORT=5000
+" > $env_folder/$env_file
+}
 
 
 main_init() {
@@ -262,9 +292,20 @@ create_settings_py
 create_test_config
 create_startup_and_test_script
 create_dockerfile_dgo
+create_gitignore
 create_other_root_files
+create_env_files
 }
 
-
 main_init
-# rm -rf $base_dir $base_dir_tests && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+
+
+# print_eof() {
+    # cat << EOF > ./sadasd.txt
+    # rpcuser=user$(openssl rand -hex 32)
+    # rpcpassword=pass$(openssl rand -hex 32)
+    # rpcport=45453
+    # EOF
+# }
+
