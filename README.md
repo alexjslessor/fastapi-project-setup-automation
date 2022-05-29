@@ -53,3 +53,31 @@ FastAPI is a flexible framework. There isn't any right/wrong setup. This is a ge
         └── base_config.py
 ```
 
+
+
+
+
+# Important Commands
+
+## __virtualenvwrapper__
+
+```sh
+source virtualenvwrapper.sh
+
+# make new env
+mkvirtualenv template-env
+
+# wipe all non-default packages in env
+wipeenv
+
+# deactivate env
+deactivate
+
+# list all envs
+lsvirtualenv
+
+# delete env
+rmvirtualenv env-name
+```
+
+
