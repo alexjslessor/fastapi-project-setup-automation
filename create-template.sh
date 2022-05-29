@@ -78,7 +78,7 @@ create_dockerfile_dgo() {
     # ~/Dockerfile at project root directory.
     touch $dockerfile
     printf \
-"FROM python:3.9
+'FROM python:3.9
 
 WORKDIR /app
 
@@ -89,22 +89,18 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 ADD backend backend
 ADD main.py .
 
-ENV PORT=5000
-
-#CMD ['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '5000']
-CMD uvicorn main:app --host 0.0.0.0 --port 5000
-" > $dockerfile
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+# CMD uvicorn main:app --host 0.0.0.0 --port $PORT
+' > $dockerfile
 }
 
 
 
 create_test_config() {    # ~/tests
     mkdir $base_dir_tests
-
     touch $base_dir_tests/$init
     # ~/tests/conftest.py
     touch $base_dir_tests/$conftest
-
     touch $base_dir_tests/test_one.py \
             $base_dir_tests/test_two.py
     # ~/setup.cfg
@@ -150,9 +146,8 @@ def create_app() -> FastAPI:
 }
 
 
-
+# ~/main.py
 create_main_py() {
-    # ~/main.py
     touch $main
     printf \
 "from backend.entry import create_app
@@ -167,7 +162,6 @@ if __name__ == '__main__':
 
 create_settings_py() {
     touch $base_dir/$settings
-
     printf \
 "from functools import lru_cache
 from pydantic import BaseSettings, AnyUrl
@@ -224,22 +218,21 @@ def get_settings() -> BaseSettings:
 
 
 
-
+# ~/startup.sh
 create_startup_and_test_script() {
-    # ~/startup.sh
     touch $startup
     printf  \
 "#!/bin/bash
 
 init_env() {
     # grep -v '^#' .env/.env.local
-    export $ (grep -v '^#' .env/.env.local | xargs)
+    export \$(grep -v '^#' .env/.env.local | xargs)
     env | grep MONGO_URI_DEV
 }
 
 # Start app with env vars
 init_env
-uvicorn main:app --reload --port 5000
+uvicorn main:app --reload --port \$PORT
 
 run_tests() {
     py.test -s tests/test_one.py
@@ -247,7 +240,7 @@ run_tests() {
 }
 run_docker_local_test() {
     docker build -t fastapi_app:latest .
-    docker run --name test-container -p 5000:5000 fastapi_app:latest
+    docker run --name test-container -p \$PORT:\$PORT fastapi_app:latest
 }
 " > $startup
 
@@ -255,9 +248,37 @@ sudo chmod 755 $startup
 }
 
 
+create_requirements_txt() {
+    printf \
+"
+fastapi
+pydantic[email,dotenv]
+uvicorn[standard]
+python-multipart
+httpx
+
+
+# testing related
+#asgi-lifespan
+#pytest-asyncio
+#pytest-cov
+
+
+# mongodb related
+motor
+
+
+# celery worker related
+#celery
+#redis
+#flower
+" > $reqs
+}
+
+
 create_other_root_files() {
     # create root files
-    touch $reqs $dockerignore
+    touch $dockerignore
 }
 
 create_gitignore() {
@@ -272,7 +293,6 @@ create_env_files() {
     mkdir $env_folder
     touch $env_folder/$env_file
     touch $env_folder/.env.example
-
 printf \
 "SECRET=hex_hash
 MONGO_URI_DEV=mongo_uri
@@ -289,11 +309,14 @@ step_2_create_dir_files_v1
 create_main_py
 create_entry_py
 create_settings_py
+
 create_test_config
 create_startup_and_test_script
+
 create_dockerfile_dgo
 create_gitignore
 create_other_root_files
+create_requirements_txt
 create_env_files
 }
 

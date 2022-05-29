@@ -1,0 +1,44 @@
+# FROM pypy:3.8-7-slim
+FROM python:3.8-slim
+
+ENV APP_HOME /app
+# prevents writing .pyc
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+WORKDIR $APP_HOME
+
+RUN apt-get update \
+    && apt-get install -y gcc g++ openssl libxml2-dev libxslt-dev musl-dev libxslt1-dev libffi-dev zlib1g-dev libssl-dev \
+    && apt-get install -y build-essential python3-dev python3-pip python3-setuptools python3-wheel \
+    && apt-get install -y tesseract-ocr libmagickwand-dev python3-cffi python3-opencv ffmpeg libsm6 libxext6 libcairo2 libgl1-mesa-glx
+
+
+# ADD gunicorn_config.py requirements.txt ./
+ADD requirements.txt ./
+
+
+# upgrade pip to ensure no errors
+RUN pip install -U pip
+RUN pip install -r requirements.txt --no-cache-dir
+RUN pip install -vvv uvloop
+
+ADD backend backend
+ADD main.py main.py
+ADD logs.log logs.log
+
+# ADD policy.xml /etc/ImageMagick-6
+
+RUN find /usr/local/lib/python3.8 -name '*.c' -delete \
+    && find /usr/local/lib/python3.8 -name '*.pxd' -delete \
+    && find /usr/local/lib/python3.8 -name '*.pyd' -delete \
+    && find /usr/local/lib/python3.8 -name '__pycache__' | xargs rm -r
+
+
+ENV PORT=5000
+EXPOSE 5000
+
+# run with gunicorn
+# CMD gunicorn -c gunicorn_config.py main:app
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD uvicorn main:app --reload --reload-dir backend --host 0.0.0.0 --port $PORT
