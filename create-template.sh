@@ -209,8 +209,10 @@ def get_settings() -> BaseSettings:
         'production': ProdSettings,
         'testing': TestSettings
     }
-    config_name: str = environ.get('ENV_NAME', 'development')
-    assert config_name != None, f'Set ENV_NAME variable: {list(config_dict.keys())}'
+    config_name: str = environ.get('ENV_NAME')
+
+    assert config_name in list(config_dict.keys()), f'Invalid ENV_NAME, should be one of: {list(config_dict.keys())}'
+    
     config_cls = config_dict[config_name]
     return config_cls()
 " > $base_dir/$settings
@@ -227,7 +229,7 @@ create_startup_and_test_script() {
 init_env() {
     # grep -v '^#' .env/.env.local
     export \$(grep -v '^#' .env/.env.local | xargs)
-    env | grep MONGO_URI_DEV
+    env | grep ENV_NAME
 }
 
 # Start app with env vars
@@ -317,8 +319,8 @@ create_requirements_txt
 create_env_files
 }
 
-# main_init
-rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+main_init
+# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
 # print_eof() {
