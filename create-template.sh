@@ -89,6 +89,7 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 ADD backend backend
 ADD main.py .
 
+# these both do the same thing
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
 # CMD uvicorn main:app --host 0.0.0.0 --port $PORT
 ' > $dockerfile
@@ -100,14 +101,14 @@ create_test_config() {    # ~/tests
     mkdir $base_dir_tests
     touch $base_dir_tests/$init
     # ~/tests/conftest.py
-    touch  $base_dir_tests/test_two.py
+    # touch  $base_dir_tests/test_two.py
     # ~/setup.cfg
     touch $setup_cfg
     printf \
 '[coverage:run]
 branch = True
 # define paths to omit, comma separated
-omit = */.virtualenvs/*,~/.virtualenvs,./backend/utils/*
+omit = .venv/**,*/.virtualenvs/*,~/.virtualenvs
 
 [coverage:report]
 show_missing = True
@@ -133,28 +134,35 @@ filterwarnings = ignore::DeprecationWarning
 
 printf \
 '
-# from asgi_lifespan import LifespanManager
-# from starlette.status import HTTP_200_OK
-# from httpx import AsyncClient
-# import pytest_asyncio
+from asgi_lifespan import LifespanManager
+from starlette.status import HTTP_200_OK
+from httpx import AsyncClient
+import pytest_asyncio
 import pytest
-# import asyncio
+import asyncio
+from backend.entry import create_app
+# from backend.settings import _BaseSettings, get_settings
 
-# from backend.entry import create_app
+# def get_settings_override():
+    # return Settings(MONGO_URI="testing_mongo_uri")
 
-# app = create_app()
+app = create_app()
 
-# @pytest_asyncio.fixture(scope="session")
-# def event_loop():
-#     loop = asyncio.get_event_loop()
-#     yield loop
-#     loop.close()
+@pytest_asyncio.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop()
+    yield loop
+    loop.close()
 
-# @pytest_asyncio.fixture
-# async def test_client():
-#     async with LifespanManager(app):
-#         async with AsyncClient(app=app, base_url="https://app.io", timeout=30) as test_client:
-#             yield test_client
+##this is for testing routes
+@pytest_asyncio.fixture
+async def test_client():
+    
+    # app.dependency_overrides[get_settings] = get_settings_override
+
+    async with LifespanManager(app):
+        async with AsyncClient(app=app, base_url="https://app.io", timeout=30) as test_client:
+            yield test_client
 ' > $base_dir_tests/$conftest
 
 printf \
@@ -167,21 +175,25 @@ class Test_Dependancies:
     async def test_example_dependancy(self):
         # this is for testing 
         assert len("abcd") > 1
+' > $base_dir_tests/test_deps.py
 
-# @pytest.mark.asyncio
-# class Test_Routers:
+printf \
+'
+from .conftest import *
 
-#     async def test_example_router(self, test_client: AsyncClient):
-#         resp = await test_client.get("/")
-#         assert resp.status_code == HTTP_200_OK
-#         print(resp.json())
-' > $base_dir_tests/test_one.py
+@pytest.mark.asyncio
+class Test_Routers:
+
+    async def test_example_router(self, test_client: AsyncClient):
+        resp = await test_client.get("/")
+        assert resp.status_code == HTTP_200_OK
+        print(resp.json())
+' > $base_dir_tests/test_routes.py
 }
 
 
 create_entry_py() {
     touch $base_dir/$entry
-
     printf \
 "from fastapi import FastAPI
 
@@ -207,7 +219,7 @@ app = create_app()
 
 if __name__ == '__main__':
     app
-    " > $main
+" > $main
 }
 
 
@@ -215,7 +227,7 @@ create_settings_py() {
     touch $base_dir/$settings
     printf \
 "from functools import lru_cache
-from pydantic import BaseSettings, AnyUrl
+from pydantic import BaseSettings, AnyUrl, RedisDsn
 from os import environ
 from typing import List, Callable
 import os.path
@@ -239,18 +251,33 @@ class _BaseSettings(BaseSettings):
     FILE_TYPE_ERROR = 'Upload File Error: Incorrect File Type.'
 
     PORT: int = environ.get('PORT')
-    MONGO_URI_DEV: str = environ.get('MONGO_URI_DEV')
+    MONGO_URI: str = environ.get('MONGO_URI')
     MONGO_DB_NAME: str = 'database'
 
-class DevSettings(_BaseSettings):
     ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(ROOT_DIR, 'data')
+
+    CELERY_BROKER_URL: str = environ.get('CELERY_BROKER_URL')
+    CELERY_RESULT_BACKEND: str = environ.get('CELERY_RESULT_BACKEND')
+    WS_MESSAGE_QUEUE: str = environ.get('WS_MESSAGE_QUEUE')
+
+    CELERY_BEAT_SCHEDULE: dict = {
+        'task-name-one': {
+            'task': 'task_name_one',
+            'schedule': 5.0,  # five seconds
+        },
+    }
+
+
+class DevSettings(_BaseSettings):
+    pass
 
 class ProdSettings(_BaseSettings):
     pass
 
 class TestSettings(_BaseSettings):
     pass
+
 
 
 @lru_cache()
@@ -283,8 +310,12 @@ init_env() {
     env | grep ENV_NAME
 }
 run_tests() {
-    py.test -s tests/test_one.py
-    py.test -s tests/test_two.py
+    # export ENV_NAME=testing
+    export \$(grep -v '^#' .env/.env.testing | xargs)
+    env | grep ENV_NAME
+
+    py.test -s tests/test_deps.py
+    py.test -s tests/test_routes.py
 }
 run_app_local_test() {
     docker build -t fastapi_app:latest .
@@ -294,10 +325,10 @@ run_mongodb_local() {
     docker run -d --name mongodb-docker -p 27017:27017 mongo:4.4
 }
 # Start app with env vars
-init_env
-#run_tests
+# init_env
+run_tests
 #run_mongodb_local
-uvicorn main:app --reload --port \$PORT
+# uvicorn main:app --reload --port \$PORT
 " > $startup
 
 sudo chmod 755 $startup
@@ -340,20 +371,42 @@ create_gitignore() {
 .env
 .coverage
 .pytest_cache
+.vscode
 " > $gitignore
 }
 
 create_env_files() {
     # create .env folder and files
     mkdir $env_folder
-    touch $env_folder/.env.production
+    local env_file_test=.env.testing
+    local env_file_prod=.env.production
+
 printf \
 "SECRET=hex_hash
-MONGO_URI_DEV=mongodb://localhost:27017
+MONGO_URI=mongodb://localhost:27017
 WHICH_LOGGER=uvicorn
 ENV_NAME=development
 PORT=5000
 " > $env_folder/$env_file
+
+printf \
+"
+SECRET=hex_hash
+WHICH_LOGGER=uvicorn
+MONGO_URI=mongodb://localhost:27017
+ENV_NAME=testing
+PORT=5000
+" > $env_folder/$env_file_test
+
+printf \
+"
+SECRET=hex_hash
+WHICH_LOGGER=uvicorn
+MONGO_URI=atlas_uri
+ENV_NAME=production
+PORT=5000
+" > $env_folder/$env_file_prod
+
 }
 
 
