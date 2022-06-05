@@ -105,6 +105,20 @@ Run Tests: `py.test -s`
     ├── utils
     ├── ...
 ```
+## Overview
+
+There are generally two types of code that we will be writing tests for.
+1. Dependency callables.
+2. Routes or our HTTP endpoints that will have dependancy callables injected into them.
+
+__Dependancies are just regular Python functions__ that are "injected" into our routes via FastAPI's `Depends` class.
+
+
+## conftest.py
+The conftest.py file is the configuration file for out testing package.
+All of our individual testing files, as denoted by the suffix `test_`, will import it in order to gain some common configuration.
+
+---
 
 ## Test Driven Development
 Test-driven development is a software development process relying on the following:
@@ -138,6 +152,12 @@ Test-driven development is a software development process relying on the followi
 ```
 Environment variables are variables that lives outside of the Python code, in the operating system, and can be read by your Python code (or by other programs as well).
 
+__Benefits to the .env setup in this course.__
+- Clear separation of local and production environment variables.
+- We can quickly and easily set new vaiables in a single place in our code.
+
+
+
 `Env file requirements:`
 
 - Dont want to hardcode variables.
@@ -155,6 +175,25 @@ __Documentation Reference:__
 - https://fastapi.tiangolo.com/advanced/settings/?h=envir
 - https://pydantic-docs.helpmanual.io/usage/settings/
 - https://docs.python.org/3/library/functools.html#functools.lru_cache
+
+
+
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+
 
 # Python requirements:
 
