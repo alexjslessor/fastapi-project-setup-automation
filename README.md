@@ -55,10 +55,6 @@ FastAPI is a flexible framework. There isn't any right/wrong setup. This is a ge
 
 
 
-
-
-# Important Commands
-
 ## __virtualenvwrapper__
 
 ```sh
@@ -79,5 +75,101 @@ lsvirtualenv
 # delete env
 rmvirtualenv env-name
 ```
+
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+
+
+# Unit Test Setup
+
+Run Tests: `py.test -s`
+
+```bash
+├── setup.cfg 'Contains pytest settings.'
+├── tests 'Pytest folder structured as a python package.'
+│   ├── test_two.py 'Same as test_one.py.'
+│   ├── test_one.py 'Each test file imports from .conftest.py.'
+│   ├── __init__.py 'init file as our tests are structured as a python package.'
+│   └── conftest.py 'Configuration for our tests pytest fixtures.'
+└── backend
+    ├── entry.py 'Imported by tests/conftest.py.' 
+    ├── settings.py
+    ├── utils
+    ├── ...
+```
+
+## Test Driven Development
+Test-driven development is a software development process relying on the following:
+- Software requirements being converted to test cases before software is fully developed.
+- tracking all software development by repeatedly testing the software against all test cases
+
+
+
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+
+# Setup .env and settings.py
+```sh
+.env/
+|── .env.local 'Specifies env variables for local development.'
+└── startup.sh 'Initializes local environment variables.'
+```
+Environment variables are variables that lives outside of the Python code, in the operating system, and can be read by your Python code (or by other programs as well).
+
+`Env file requirements:`
+
+- Dont want to hardcode variables.
+- Dont want to commit sensitive credentials to source control.
+- We do want to be able to change application variables externally.
+
+`@lru_cache()`
+
+- Modifies the function it decorates to return the same value that was returned the first time, instead of computing it again, executing the code of the function every time.
+
+- In the case of our dependency get_settings(), the function doesn't even take any arguments, so it always returns the same value.
+
+
+__Documentation Reference:__
+- https://fastapi.tiangolo.com/advanced/settings/?h=envir
+- https://pydantic-docs.helpmanual.io/usage/settings/
+- https://docs.python.org/3/library/functools.html#functools.lru_cache
+
+# Python requirements:
+
+Python dependancies for environment.
+```bash
+pip freeze > requirements.txt
+```
+
+
+# Large Application Structure
+
+https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=applica
+
+- ~/backend/entry.py
+    - https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=applica#import-fastapi
+
 
 

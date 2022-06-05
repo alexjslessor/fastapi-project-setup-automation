@@ -100,31 +100,82 @@ create_test_config() {    # ~/tests
     mkdir $base_dir_tests
     touch $base_dir_tests/$init
     # ~/tests/conftest.py
-    touch $base_dir_tests/$conftest
-    touch $base_dir_tests/test_one.py \
-            $base_dir_tests/test_two.py
+    touch  $base_dir_tests/test_two.py
     # ~/setup.cfg
     touch $setup_cfg
     printf \
-"[coverage:run]
+'[coverage:run]
 branch = True
 # define paths to omit, comma separated
 omit = */.virtualenvs/*,~/.virtualenvs,./backend/utils/*
+
 [coverage:report]
 show_missing = True
 skip_covered = True
+
 [coverage:html]
 directory = tests/coverage_html_report
+
 [tool:pytest]
 addopts = 
+    ; directory to cover tests with
     --cov backend/ 
+    ; coverage report type
     --cov-report html
+    ; test result verbosity in the terminal
     --verbose
+    ; mute sometimes useless warnings (not always a good idea)
     -p no:warnings
 testpaths = 
     tests
 filterwarnings = ignore::DeprecationWarning
-    " > $setup_cfg
+    ' > $setup_cfg
+
+printf \
+'
+# from asgi_lifespan import LifespanManager
+# from starlette.status import HTTP_200_OK
+# from httpx import AsyncClient
+# import pytest_asyncio
+import pytest
+# import asyncio
+
+# from backend.entry import create_app
+
+# app = create_app()
+
+# @pytest_asyncio.fixture(scope="session")
+# def event_loop():
+#     loop = asyncio.get_event_loop()
+#     yield loop
+#     loop.close()
+
+# @pytest_asyncio.fixture
+# async def test_client():
+#     async with LifespanManager(app):
+#         async with AsyncClient(app=app, base_url="https://app.io", timeout=30) as test_client:
+#             yield test_client
+' > $base_dir_tests/$conftest
+
+printf \
+'
+from .conftest import *
+
+@pytest.mark.asyncio
+class Test_Dependancies:
+
+    async def test_example_dependancy(self):
+        # this is for testing 
+        assert len("abcd") > 1
+
+# @pytest.mark.asyncio
+# class Test_Routers:
+
+#     async def test_example_router(self, test_client: AsyncClient):
+#         resp = await test_client.get("/")
+#         assert resp.status_code == HTTP_200_OK
+#         print(resp.json())
+' > $base_dir_tests/test_one.py
 }
 
 
@@ -231,19 +282,22 @@ init_env() {
     export \$(grep -v '^#' .env/.env.local | xargs)
     env | grep ENV_NAME
 }
-
-# Start app with env vars
-init_env
-uvicorn main:app --reload --port \$PORT
-
 run_tests() {
     py.test -s tests/test_one.py
     py.test -s tests/test_two.py
 }
-run_docker_local_test() {
+run_app_local_test() {
     docker build -t fastapi_app:latest .
     docker run --name test-container -p \$PORT:\$PORT fastapi_app:latest
 }
+run_mongodb_local() {
+    docker run -d --name mongodb-docker -p 27017:27017 mongo:4.4
+}
+# Start app with env vars
+init_env
+#run_tests
+#run_mongodb_local
+uvicorn main:app --reload --port \$PORT
 " > $startup
 
 sudo chmod 755 $startup
@@ -284,17 +338,18 @@ create_gitignore() {
     printf \
 "__pycache__
 .env
+.coverage
+.pytest_cache
 " > $gitignore
 }
 
 create_env_files() {
     # create .env folder and files
     mkdir $env_folder
-    touch $env_folder/$env_file
-    touch $env_folder/.env.example
+    touch $env_folder/.env.production
 printf \
 "SECRET=hex_hash
-MONGO_URI_DEV=mongo_uri
+MONGO_URI_DEV=mongodb://localhost:27017
 WHICH_LOGGER=uvicorn
 ENV_NAME=development
 PORT=5000
@@ -319,8 +374,8 @@ create_requirements_txt
 create_env_files
 }
 
-main_init
-# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+# main_init
+rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
 # print_eof() {
@@ -330,4 +385,5 @@ main_init
     # rpcport=45453
     # EOF
 # }
+
 
