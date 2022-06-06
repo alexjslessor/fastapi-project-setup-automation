@@ -158,11 +158,20 @@ __Benefits to the .env setup in this course.__
 
 
 
-`Env file requirements:`
+`settings.py File Requirements:`
 
-- Dont want to hardcode variables.
-- Dont want to commit sensitive credentials to source control.
-- We do want to be able to change application variables externally.
+Our app needs to be setup to use env vars. There are many ways to do this but this is my setup.
+
+
+We DO:
+- Want to have all env vars read from operating system. 
+- Want to inject environment variables externally.
+
+We DO NOT:
+- Want `settings.py` to read from a local .env file.
+- Want to hardcode env variables in our `settings.py` file.
+- Want to commit sensitive credentials to source control.
+
 
 `@lru_cache()`
 

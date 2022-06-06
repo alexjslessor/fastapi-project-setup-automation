@@ -264,20 +264,19 @@ class _BaseSettings(BaseSettings):
     CELERY_BEAT_SCHEDULE: dict = {
         'task-name-one': {
             'task': 'task_name_one',
-            'schedule': 5.0,  # five seconds
+            'schedule': 5.0, # five seconds
         },
     }
 
 
 class DevSettings(_BaseSettings):
-    pass
+    DEBUG: bool = True
+
+class TestSettings(_BaseSettings):
+    DEBUG: bool = True
 
 class ProdSettings(_BaseSettings):
     pass
-
-class TestSettings(_BaseSettings):
-    pass
-
 
 
 @lru_cache()
@@ -304,13 +303,13 @@ create_startup_and_test_script() {
     printf  \
 "#!/bin/bash
 
-init_env() {
+base_settings() {
     # grep -v '^#' .env/.env.local
     export \$(grep -v '^#' .env/.env.local | xargs)
     env | grep ENV_NAME
 }
 run_tests() {
-    # export ENV_NAME=testing
+    base_settings
     export \$(grep -v '^#' .env/.env.testing | xargs)
     env | grep ENV_NAME
 
@@ -325,7 +324,7 @@ run_mongodb_local() {
     docker run -d --name mongodb-docker -p 27017:27017 mongo:4.4
 }
 # Start app with env vars
-# init_env
+# base_settings
 run_tests
 #run_mongodb_local
 # uvicorn main:app --reload --port \$PORT
@@ -391,11 +390,8 @@ PORT=5000
 
 printf \
 "
-SECRET=hex_hash
-WHICH_LOGGER=uvicorn
 MONGO_URI=mongodb://localhost:27017
 ENV_NAME=testing
-PORT=5000
 " > $env_folder/$env_file_test
 
 printf \
