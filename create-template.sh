@@ -324,10 +324,11 @@ run_mongodb_local() {
     docker run -d --name mongodb-docker -p 27017:27017 mongo:4.4
 }
 # Start app with env vars
-# base_settings
+
+base_settings
 run_tests
 #run_mongodb_local
-# uvicorn main:app --reload --port \$PORT
+uvicorn main:app --reload --port \$PORT
 " > $startup
 
 sudo chmod 755 $startup
@@ -423,8 +424,8 @@ create_requirements_txt
 create_env_files
 }
 
-# main_init
-rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+main_init
+# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
 # print_eof() {
