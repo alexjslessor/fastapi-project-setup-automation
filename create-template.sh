@@ -424,8 +424,8 @@ create_requirements_txt
 create_env_files
 }
 
-main_init
-# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+# main_init
+rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
 # print_eof() {
