@@ -195,17 +195,34 @@ class Test_Routers:
 create_entry_py() {
     touch $base_dir/$entry
     printf \
-"from fastapi import FastAPI
+'from fastapi import FastAPI
+from ariadne import QueryType, make_executable_schema
+from ariadne.asgi import GraphQL
+
+type_defs = """
+    type Query {
+        hello: String!
+    }
+"""
+
+query = QueryType()
+
+@query.field("hello")
+def resolve_hello(*_):
+    return "Hello world!"
+
+schema = make_executable_schema(type_defs, query)
 
 def create_app() -> FastAPI:
     app = FastAPI()
+    app.mount("/graphql", GraphQL(schema, debug=True))
 
-    @app.get('/')
+    @app.get("/")
     async def test_route():
-        return {'message': 'Hello World'}
+        return {"message": "Hello World"}
 
     return app
-" > $base_dir/$entry
+' > $base_dir/$entry
 }
 
 
@@ -351,6 +368,9 @@ pytest-cov
 
 # mongodb related
 motor
+
+# graphql
+ariadne
 
 # celery worker related
 #celery
