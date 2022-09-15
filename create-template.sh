@@ -191,8 +191,7 @@ class Test_Routers:
 ' > $base_dir_tests/test_routes.py
 }
 
-
-create_entry_py() {
+entry_gql() {
     touch $base_dir/$entry
     printf \
 'from fastapi import FastAPI
@@ -225,6 +224,41 @@ def create_app() -> FastAPI:
 ' > $base_dir/$entry
 }
 
+entry_standard() {
+    touch $base_dir/$entry
+    printf \
+'from fastapi import FastAPI, Request
+from starlette.status import (HTTP_400_BAD_REQUEST)
+from fastapi.responses import JSONResponse
+
+class EnumException(Exception):
+    def __init__(self, error_message: str):
+        self.error_message = error_message
+
+def create_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.exception_handler(EnumException)
+    async def enum_exception_handler(
+        request: Request,
+        exc: EnumException
+        ) -> JSONResponse:
+        """
+        Custom http error response for enum param validation
+        """
+        return JSONResponse(
+            status_code=HTTP_400_BAD_REQUEST,
+            content={"error": f"{exc.error_message}"}
+        )
+
+    @app.get("/")
+    async def test_route():
+        return {"message": "Hello World"}
+
+    return app
+' > $base_dir/$entry
+}
+
 
 # ~/main.py
 create_main_py() {
@@ -240,6 +274,98 @@ if __name__ == '__main__':
 }
 
 
+celery_create_main_py() {
+    touch $main
+    printf \
+'from backend.entry import create_app
+
+app = create_app()
+celery = app.celery_app
+
+def auto_reload_celery_worker():
+    from watchgod import run_process
+    import subprocess
+    # app
+    # celery
+    def run_worker():
+        subprocess.call(
+            ["celery", "-A", "main.celery", "worker", "--loglevel=info"]
+        )
+    run_process("./backend", run_worker)
+
+if __name__ == "__main__":
+    auto_reload_celery_worker()
+
+' > $main
+}
+# https://github.com/PacktPublishing/Building-Data-Science-Applications-with-FastAPI/blob/main/chapter8/broadcast/app.py
+
+
+celery_create_compose() {
+    printf \
+"version: '3.7'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - .:/app
+    ports:
+      - 5000:5000
+    env_file:
+      - .env/.dev.prod
+
+   redis:
+     # image: redis:6-alpine
+     image: redis:latest
+     container_name: redis
+     ports:
+       - 6379:6379
+
+ celery_worker:
+   build:
+     context: .
+     dockerfile: ./Dockerfile.api.docker
+   image: celery_worker_1:latest
+   command: celery -A main.celery worker --loglevel=info
+   volumes:
+     - .:/app
+   env_file:
+     - .env/.dev.local
+   depends_on:
+     - redis
+     - web
+
+ celery_beat:
+   build:
+     context: .
+     dockerfile: ./Dockerfile.api.docker
+   image: celery_beat_1:latest
+   # command: rm -f './celerybeat.pid' && celery -A main.celery beat -l info
+   command: celery -A main.celery beat -l info
+   volumes:
+     - .:/app
+   env_file:
+     - .env/.dev.local
+   depends_on:
+     - redis
+
+ mongo_db:
+   build:
+     context: ./
+     dockerfile: Dockerfile.mongo
+   volumes:
+     - $PWD/data_mongo:/data/db
+     - $PWD/data_mongo:/var/www/html
+   ports:
+     - 27017:27017
+   environment:
+     MONGO_INITDB_ROOT_USERNAME: root
+     MONGO_INITDB_ROOT_PASSWORD: 123
+" > docker-compose.yaml
+}
 create_settings_py() {
     touch $base_dir/$settings
     printf \
@@ -426,25 +552,27 @@ PORT=5000
 
 }
 
-
-main_init() {
-step_1_create_dirs
-step_2_create_dir_files_v1
-create_main_py
-create_entry_py
-create_settings_py
-
-create_test_config
-create_startup_and_test_script
-
-create_dockerfile_dgo
-create_gitignore
-create_other_root_files
-create_requirements_txt
-create_env_files
+# make_celery_app() {
+# }
+make_gql_app() {
+    entry_gql
+}
+main_standard_app() {
+    step_1_create_dirs
+    step_2_create_dir_files_v1
+    create_main_py
+    entry_standard
+    create_settings_py
+    create_test_config
+    create_startup_and_test_script
+    create_dockerfile_dgo
+    create_gitignore
+    create_other_root_files
+    create_requirements_txt
+    create_env_files
 }
 
-# main_init
+# main_standard_app
 rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
