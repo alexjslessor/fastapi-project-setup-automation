@@ -78,7 +78,7 @@ create_dockerfile_dgo() {
     # ~/Dockerfile at project root directory.
     touch $dockerfile
     printf \
-"FROM python:3.9
+'FROM python:3.9
 
 WORKDIR /app
 
@@ -89,70 +89,179 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 ADD backend backend
 ADD main.py .
 
-ENV PORT=5000
-
-#CMD ['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '5000']
-CMD uvicorn main:app --host 0.0.0.0 --port 5000
-" > $dockerfile
+# these both do the same thing
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+# CMD uvicorn main:app --host 0.0.0.0 --port $PORT
+' > $dockerfile
 }
 
 
 
 create_test_config() {    # ~/tests
     mkdir $base_dir_tests
-
     touch $base_dir_tests/$init
     # ~/tests/conftest.py
-    touch $base_dir_tests/$conftest
-
-    touch $base_dir_tests/test_one.py \
-            $base_dir_tests/test_two.py
+    # touch  $base_dir_tests/test_two.py
     # ~/setup.cfg
     touch $setup_cfg
     printf \
-"[coverage:run]
+'[coverage:run]
 branch = True
 # define paths to omit, comma separated
-omit = */.virtualenvs/*,~/.virtualenvs,./backend/utils/*
+omit = .venv/**,*/.virtualenvs/*,~/.virtualenvs
+
 [coverage:report]
 show_missing = True
 skip_covered = True
+
 [coverage:html]
 directory = tests/coverage_html_report
+
 [tool:pytest]
 addopts = 
+    ; directory to cover tests with
     --cov backend/ 
+    ; coverage report type
     --cov-report html
+    ; test result verbosity in the terminal
     --verbose
+    ; mute sometimes useless warnings (not always a good idea)
     -p no:warnings
 testpaths = 
     tests
 filterwarnings = ignore::DeprecationWarning
-    " > $setup_cfg
+    ' > $setup_cfg
+
+printf \
+'
+from asgi_lifespan import LifespanManager
+from starlette.status import HTTP_200_OK
+from httpx import AsyncClient
+import pytest_asyncio
+import pytest
+import asyncio
+from backend.entry import create_app
+# from backend.settings import _BaseSettings, get_settings
+
+# def get_settings_override():
+    # return Settings(MONGO_URI="testing_mongo_uri")
+
+app = create_app()
+
+@pytest_asyncio.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop()
+    yield loop
+    loop.close()
+
+##this is for testing routes
+@pytest_asyncio.fixture
+async def test_client():
+    
+    # app.dependency_overrides[get_settings] = get_settings_override
+
+    async with LifespanManager(app):
+        async with AsyncClient(app=app, base_url="https://app.io", timeout=30) as test_client:
+            yield test_client
+' > $base_dir_tests/$conftest
+
+printf \
+'
+from .conftest import *
+
+@pytest.mark.asyncio
+class Test_Dependancies:
+
+    async def test_example_dependancy(self):
+        # this is for testing 
+        assert len("abcd") > 1
+' > $base_dir_tests/test_deps.py
+
+printf \
+'
+from .conftest import *
+
+@pytest.mark.asyncio
+class Test_Routers:
+
+    async def test_example_router(self, test_client: AsyncClient):
+        resp = await test_client.get("/")
+        assert resp.status_code == HTTP_200_OK
+        print(resp.json())
+' > $base_dir_tests/test_routes.py
 }
 
-
-create_entry_py() {
+entry_gql() {
     touch $base_dir/$entry
-
     printf \
-"from fastapi import FastAPI
+'from fastapi import FastAPI
+from ariadne import QueryType, make_executable_schema
+from ariadne.asgi import GraphQL
+
+type_defs = """
+    type Query {
+        hello: String!
+    }
+"""
+
+query = QueryType()
+
+@query.field("hello")
+def resolve_hello(*_):
+    return "Hello world!"
+
+schema = make_executable_schema(type_defs, query)
+
+def create_app() -> FastAPI:
+    app = FastAPI()
+    app.mount("/graphql", GraphQL(schema, debug=True))
+
+    @app.get("/")
+    async def test_route():
+        return {"message": "Hello World"}
+
+    return app
+' > $base_dir/$entry
+}
+
+entry_standard() {
+    touch $base_dir/$entry
+    printf \
+'from fastapi import FastAPI, Request
+from starlette.status import (HTTP_400_BAD_REQUEST)
+from fastapi.responses import JSONResponse
+
+class EnumException(Exception):
+    def __init__(self, error_message: str):
+        self.error_message = error_message
 
 def create_app() -> FastAPI:
     app = FastAPI()
 
-    @app.get('/')
+    @app.exception_handler(EnumException)
+    async def enum_exception_handler(
+        request: Request,
+        exc: EnumException
+        ) -> JSONResponse:
+        """
+        Custom http error response for enum param validation
+        """
+        return JSONResponse(
+            status_code=HTTP_400_BAD_REQUEST,
+            content={"error": f"{exc.error_message}"}
+        )
+
+    @app.get("/")
     async def test_route():
-        return {'message': 'Hello World'}
+        return {"message": "Hello World"}
 
     return app
-" > $base_dir/$entry
+' > $base_dir/$entry
 }
 
 
-
+# ~/main.py
 create_main_py() {
-    # ~/main.py
     touch $main
     printf \
 "from backend.entry import create_app
@@ -161,16 +270,107 @@ app = create_app()
 
 if __name__ == '__main__':
     app
-    " > $main
+" > $main
 }
 
 
+celery_create_main_py() {
+    touch $main
+    printf \
+'from backend.entry import create_app
+
+app = create_app()
+celery = app.celery_app
+
+def auto_reload_celery_worker():
+    from watchgod import run_process
+    import subprocess
+    # app
+    # celery
+    def run_worker():
+        subprocess.call(
+            ["celery", "-A", "main.celery", "worker", "--loglevel=info"]
+        )
+    run_process("./backend", run_worker)
+
+if __name__ == "__main__":
+    auto_reload_celery_worker()
+
+' > $main
+}
+# https://github.com/PacktPublishing/Building-Data-Science-Applications-with-FastAPI/blob/main/chapter8/broadcast/app.py
+
+
+celery_create_compose() {
+    printf \
+"version: '3.7'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - .:/app
+    ports:
+      - 5000:5000
+    env_file:
+      - .env/.dev.prod
+
+   redis:
+     # image: redis:6-alpine
+     image: redis:latest
+     container_name: redis
+     ports:
+       - 6379:6379
+
+ celery_worker:
+   build:
+     context: .
+     dockerfile: ./Dockerfile.api.docker
+   image: celery_worker_1:latest
+   command: celery -A main.celery worker --loglevel=info
+   volumes:
+     - .:/app
+   env_file:
+     - .env/.dev.local
+   depends_on:
+     - redis
+     - web
+
+ celery_beat:
+   build:
+     context: .
+     dockerfile: ./Dockerfile.api.docker
+   image: celery_beat_1:latest
+   # command: rm -f './celerybeat.pid' && celery -A main.celery beat -l info
+   command: celery -A main.celery beat -l info
+   volumes:
+     - .:/app
+   env_file:
+     - .env/.dev.local
+   depends_on:
+     - redis
+
+ mongo_db:
+   build:
+     context: ./
+     dockerfile: Dockerfile.mongo
+   volumes:
+     - $PWD/data_mongo:/data/db
+     - $PWD/data_mongo:/var/www/html
+   ports:
+     - 27017:27017
+   environment:
+     MONGO_INITDB_ROOT_USERNAME: root
+     MONGO_INITDB_ROOT_PASSWORD: 123
+" > docker-compose.yaml
+}
 create_settings_py() {
     touch $base_dir/$settings
-
     printf \
 "from functools import lru_cache
-from pydantic import BaseSettings, AnyUrl
+from pydantic import BaseSettings, AnyUrl, RedisDsn
 from os import environ
 from typing import List, Callable
 import os.path
@@ -194,17 +394,31 @@ class _BaseSettings(BaseSettings):
     FILE_TYPE_ERROR = 'Upload File Error: Incorrect File Type.'
 
     PORT: int = environ.get('PORT')
-    MONGO_URI_DEV: str = environ.get('MONGO_URI_DEV')
+    MONGO_URI: str = environ.get('MONGO_URI')
     MONGO_DB_NAME: str = 'database'
 
-class DevSettings(_BaseSettings):
     ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(ROOT_DIR, 'data')
 
-class ProdSettings(_BaseSettings):
-    pass
+    CELERY_BROKER_URL: str = environ.get('CELERY_BROKER_URL')
+    CELERY_RESULT_BACKEND: str = environ.get('CELERY_RESULT_BACKEND')
+    WS_MESSAGE_QUEUE: str = environ.get('WS_MESSAGE_QUEUE')
+
+    CELERY_BEAT_SCHEDULE: dict = {
+        'task-name-one': {
+            'task': 'task_name_one',
+            'schedule': 5.0, # five seconds
+        },
+    }
+
+
+class DevSettings(_BaseSettings):
+    DEBUG: bool = True
 
 class TestSettings(_BaseSettings):
+    DEBUG: bool = True
+
+class ProdSettings(_BaseSettings):
     pass
 
 
@@ -215,8 +429,10 @@ def get_settings() -> BaseSettings:
         'production': ProdSettings,
         'testing': TestSettings
     }
-    config_name: str = environ.get('ENV_NAME', 'development')
-    assert config_name != None, f'Set ENV_NAME variable: {list(config_dict.keys())}'
+    config_name: str = environ.get('ENV_NAME')
+
+    assert config_name in list(config_dict.keys()), f'Invalid ENV_NAME, should be one of: {list(config_dict.keys())}'
+    
     config_cls = config_dict[config_name]
     return config_cls()
 " > $base_dir/$settings
@@ -224,81 +440,140 @@ def get_settings() -> BaseSettings:
 
 
 
-
+# ~/startup.sh
 create_startup_and_test_script() {
-    # ~/startup.sh
     touch $startup
     printf  \
 "#!/bin/bash
 
-init_env() {
-    # grep -v '^#' .env/.dev.local
-    export $ (grep -v '^#' .env/.dev.local | xargs)
-    env | grep MONGO_URI_DEV
+base_settings() {
+    # grep -v '^#' .env/.env.local
+    export \$(grep -v '^#' .env/.env.local | xargs)
+    env | grep ENV_NAME
 }
-
-# Start app with env vars
-init_env
-uvicorn main:app --reload --port 5000
-
 run_tests() {
-    py.test -s tests/test_one.py
-    py.test -s tests/test_two.py
+    base_settings
+    export \$(grep -v '^#' .env/.env.testing | xargs)
+    env | grep ENV_NAME
+
+    py.test -s tests/test_deps.py
+    py.test -s tests/test_routes.py
 }
-run_docker_local_test() {
+run_app_local_test() {
     docker build -t fastapi_app:latest .
-    docker run --name test-container -p 5000:5000 fastapi_app:latest
+    docker run --name test-container -p \$PORT:\$PORT fastapi_app:latest
 }
+run_mongodb_local() {
+    docker run -d --name mongodb-docker -p 27017:27017 mongo:4.4
+}
+# Start app with env vars
+
+base_settings
+run_tests
+#run_mongodb_local
+uvicorn main:app --reload --port \$PORT
 " > $startup
 
 sudo chmod 755 $startup
 }
 
 
+create_requirements_txt() {
+    printf \
+"
+fastapi
+pydantic[email,dotenv]
+uvicorn[standard]
+python-multipart
+httpx
+
+# testing related
+asgi-lifespan
+pytest-asyncio
+pytest-cov
+
+# mongodb related
+motor
+
+# graphql
+ariadne
+
+# celery worker related
+#celery
+#redis
+#flower
+" > $reqs
+}
+
+
 create_other_root_files() {
     # create root files
-    touch $reqs $dockerignore
+    touch $dockerignore
 }
 
 create_gitignore() {
-    # touch $gitignore
-    printf "__pycache__
+    printf \
+"__pycache__
 .env
+.coverage
+.pytest_cache
+.vscode
 " > $gitignore
 }
 
 create_env_files() {
     # create .env folder and files
     mkdir $env_folder
-    touch $env_folder/$env_file
-    touch $env_folder/.env.example
+    local env_file_test=.env.testing
+    local env_file_prod=.env.production
 
 printf \
-"SECRET=<hex hash>
-MONGO_URI_DEV=<mongo uri>
+"SECRET=hex_hash
+MONGO_URI=mongodb://localhost:27017
 WHICH_LOGGER=uvicorn
 ENV_NAME=development
 PORT=5000
 " > $env_folder/$env_file
+
+printf \
+"
+MONGO_URI=mongodb://localhost:27017
+ENV_NAME=testing
+" > $env_folder/$env_file_test
+
+printf \
+"
+SECRET=hex_hash
+WHICH_LOGGER=uvicorn
+MONGO_URI=atlas_uri
+ENV_NAME=production
+PORT=5000
+" > $env_folder/$env_file_prod
+
 }
 
-
-main_init() {
-step_1_create_dirs
-step_2_create_dir_files_v1
-create_main_py
-create_entry_py
-create_settings_py
-create_test_config
-create_startup_and_test_script
-create_dockerfile_dgo
-create_gitignore
-create_other_root_files
-create_env_files
+# make_celery_app() {
+# }
+make_gql_app() {
+    entry_gql
+}
+main_standard_app() {
+    step_1_create_dirs
+    step_2_create_dir_files_v1
+    create_main_py
+    entry_standard
+    create_settings_py
+    create_test_config
+    create_startup_and_test_script
+    create_dockerfile_dgo
+    create_gitignore
+    create_other_root_files
+    create_requirements_txt
+    create_env_files
 }
 
-main_init
-# rm -rf $base_dir $base_dir_tests $env_folder __pycache__ && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
+# main_standard_app
+rm -rf $base_dir $base_dir_tests $env_folder __pycache__ .coverage .pytest_cache && rm $reqs $main $startup $dockerfile $setup_cfg $gitignore $dockerignore
 
 
 # print_eof() {
@@ -308,4 +583,5 @@ main_init
     # rpcport=45453
     # EOF
 # }
+
 
